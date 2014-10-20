@@ -19,8 +19,8 @@ Table of Contents
  
 2. kTBS Performance
   1. Triple-store performance
-  2. lock & apache multi-process
-  3. uWSGI
+  2. Locking mechanism
+  3. Running the kTBS in multi-process behind Apache
 
 3. Authentication with SSO
   1. What is OpenID Connect? (diff openid, oauth2, etc. for disambiguation, the basics of how it works)
@@ -29,8 +29,6 @@ Table of Contents
 
 kTBS: Purpose & Composition
 ---------------------------
-
-[//]: # (tell that scale: proto --> app)
 
 While the kTBS has a theoretical background, it is used in practical ways to solve different problems.
 People tend to use it to collect data and to get some knowledge from the data.
@@ -77,7 +75,7 @@ kTBS Performance
 ----------------
 
 
-### Triple-store ###
+### Triple-store Performance ###
 
 My first task on the kTBS was to analyse its current performance so it can be used later to see if it has improved.
 
@@ -181,14 +179,18 @@ Last, we make sure to clean after ourselves in the [`finally` block](https://git
         semaphore.close()
 ```
 
-[//]: # (TODO explain the little extra stuff of lock() ?)
+
+There are two code blocks that I didn't mention yet :
+
+- The first one is the first [`if` block](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L85-L86). Its purpose is to set a timeout value for the lock.
+
+- The second one is the second [`if` block](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L88-L91). We check if the thread that asks for the lock is a re-entering thread. This happens for example when one deletes a trace: we lock the base via [`InBase.delete`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L135), but the call to [`super()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L136) leads to a call to [`edit()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L130) that also wants to lock the base. It is safe to let it bypass the lock at this point because it already locked the ressource upper in the call stack. That what's we do with this `if` block.
 
 
 #### Using the lock ####
-[//]: # (TODO explain OOP architecture and how locks work with that)
 The lock mechanism is provided as a mixin class [`WithLockMixin`][ktbs-source-withlockmixin]. This means that every class that has `WithLockMixin` has a parent will be able to use the locking mechanism. This is the case for the classes [`KtbsRoot`][ktbs-source-ktbsroot] and [`Base`][ktbs-source-base] that inherits `WithLockMixin` as their *first* parent.
 
-As you can see in the `WithLockMixin` class, we have implemented the methods: `edit`, `post_grah`, `delete`. The classes `KtbsRoot` and `Base` already had those methods from other class inheritance. What we wanted to do is wrap these existing methods in a `lock` context. We used the concept of [context][py-doc-context] in Python. The idea is that you have a function, called a *context manager*, that will encapsulate some code and you want to do things before and/or after the code. If we decorate a function with `@contextmanager` then we can run the encapsulated code with a `yield` statement:
+As you can see in the `WithLockMixin` class, we have implemented the methods: `edit`, `post_grah`, `delete`. The classes `KtbsRoot` and `Base` already had those methods from other class inheritance. What we wanted to do is wrap these existing methods inside a `lock`. We used the concept of [context][py-doc-context] in Python to do this. The idea is that you have a function, called a *context manager*, that will encapsulate some code and you want to do things before and/or after the code. If we decorate a function with `@contextmanager` then we can run the encapsulated code with a `yield` statement:
 
 ```python
 @contextmanager
@@ -224,13 +226,10 @@ class WithLockMixin:
             super(WithLockMixin, self).post_graph()
 ```
 
-This way when `post_graph` is called on a `Base`, it will call this method. The method will get the lock, run the main code of `post_graph` that is defined in another class that `Base` inherits from, and then close the lock.
-
-<!-- In the kTBS the data is stored in a tree-like structure. A *kTBS root* holds multiple *bases*, which hold multiple *traces*, which in turn hold multiple *obsels*. Both the 
-
-The kTBS makes extensive use of OOP and in particular multiple-inheritance. The major data objects are *base*, *trace* and *obsel*. They all inherit from the [`IResource`][ktbs-source-ires] class in the kTBS implementation. -->
+This way when `post_graph` is called on a `Base`, it will call the `WithLockMixin` method first. The method will get the lock, run the main code of `post_graph` that is defined in another class that `Base` inherits from, and then close the lock.
 
 
+### Running the kTBS in multi-process behind Apache ###
 [//]: # (TODO apache multi-proc)
 
 [//]: # (TODO résultats)
@@ -245,7 +244,6 @@ The kTBS makes extensive use of OOP and in particular multiple-inheritance. The 
 [ktbs-source-lock]: https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/lock.py
 [py-doc-context]: https://docs.python.org/2/reference/datamodel.html#context-managers
 
-### uWSGI ###
 
 
 
