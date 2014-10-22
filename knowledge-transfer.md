@@ -1,30 +1,25 @@
-KNOWLEDGE TRANSFER
+Knowledge Transfer
 ==================
 
 by Vincent, on October 2014.
 
-[//]: # (documenter les résultats de ce que j'ai fais)
-[//]: # (pré-requis pour permettre la comprehension de ce que j'ai fais par d'autres)
-
 
 Abstract
 --------
-This documents is a retrospective of my work at LIRIS. I worked on improving the kTBS, both in term of performance and usability. The performance part was two-fold: evaluate different RDF stores with benchmarking, improve the kTBS core performance with multi-threading. The usability part was on protecting data using authentification and authorization. In this document I will try to explain how I did it, and what are the results. Overall, I think my work helped making the kTBS more production ready.
+This documents is a retrospective of my work at LIRIS. I worked on improving the kTBS, both in term of performance and usability. The performance part was two-fold: evaluate different RDF stores with benchmarking, improve the kTBS core performance with multi-threading. The usability part was on protecting data using authentication and authorization. In this document I will try to explain how I did it, and what are the results. Overall, I think my work helped making the kTBS more production ready.
 
 
 Table of Contents
 -----------------
 
 1. kTBS: Purpose & Composition
- 
 2. kTBS Performance
-  1. Triple-store performance
-  2. Locking mechanism
-  3. Running the kTBS in multi-process behind Apache
-
+    1. Triple-store performance
+    2. Locking mechanism
+    3. Running the kTBS in multi-process behind Apache
 3. Authentication with SSO
-  1. What is OpenID Connect? (diff openid, oauth2, etc. for disambiguation, the basics of how it works)
-  2. How the kTBS could benefit from it?
+    1. What is OpenID Connect? (diff openid, oauth2, etc. for disambiguation, the basics of how it works)
+    2. How the kTBS could benefit from it?
 
 
 kTBS: Purpose & Composition
@@ -42,7 +37,7 @@ In order to get knowledge from the collected data, a user makes requests to the 
 The kTBS is a bit like a database. A major difference between standard SQL databases and the kTBS is the data format. SQL databases use the concept of tables to store data, whereas the kTBS uses RDF.
 In RDF, data is stored as triples to make expressions of the form: subject-predicate-object. This is where the knowledge part of the kTBS comes from. In order to store theses triples we will see later that we need a special piece of software called a *triple store*.
 
-From a more technical point of view, the [main kTBS implementation][gh-ktbs] is in Python. It is split into the kTBS core and the RDFREST interface.
+From a more technical point of view, the [main kTBS implementationn][gh-ktbs] is in Python. It is split into the kTBS core and the RDFREST interface.
 The [kTBS documentation][rtd-ktbs] provides an [abstract API specification][rtd-ktbs-apispec] so developers can implement the kTBS in many languages.
 
 The full kTBS stack looks like this:
@@ -92,7 +87,7 @@ I will not extend the discussion on these benchmarks here, as I already did so o
 
 The main result from these benchmarks is that the existing triple-store, Sleepycat, is as good or better than others for what we want to do with the kTBS. We kept Sleepycat as moving to another triple-store would require a significant amount of work for probably no performance improvement. I had some trouble with some RDF stores ([see why][discarding-stores]), namely Jena and 4store, and maybe they could outperform Sleepycat and Virtuoso. But we didn't want to spend time to diagnose, fix, and tweak them, we wanted to benchmark stores that perform well pretty much out of the box.
 
-[//]: # (TODO: lien vers tutoriel benchmark)
+I made a [tutorial on how to setup and run the benchmarks on rdflib stores][bench-tuto]. Hopefully you can take knowledge from it and be able to run your own benchmarks.
 
 [wp-sleepycat]: https://en.wikipedia.org/wiki/Berkeley_DB
 [virtuoso]: http://virtuoso.openlinksw.com/
@@ -100,13 +95,14 @@ The main result from these benchmarks is that the existing triple-store, Sleepyc
 [4store]: http://4store.org/
 [ktbs-reports]: http://ktbs-bench.readthedocs.org/en/latest/reports.html
 [discarding-stores]: http://ktbs-bench.readthedocs.org/en/latest/reports/bench_selected_stores.html
+[bench-tuto]: http://nbviewer.ipython.org/github/ktbs/ktbs-bench/blob/master/bench_examples/Tutorial%20setup%20benchmark.ipynb
 
 
 ### Running the kTBS in parallel ###
 
-The next step for improving the kTBS performance was to tune the kTBS itself. Eventhough the implementation was not easy, the idea is fairly simple: make the kTBS run in several instances to take advantage of the request parallelization.
+The next step for improving the kTBS performance was to tune the kTBS itself. Even though the implementation was not easy, the idea is fairly simple: make the kTBS run in several instances to take advantage of the request parallelization.
 
-If the kTBS doesn't run in parallel then it will run the requests sequentially, one after antoher. For example, if a user does a request to get all the obsels on a base that takes 1 min, then another that just want to post a single obsel will have to wait a full minute. But if the kTBS runs in parallel, it will accept multiple requests to be run *at the same time*, leading to a shorter response time. For the above example, the second user request doesn't have to wait for the first request completion to post the obsel.
+If the kTBS doesn't run in parallel then it will run the requests sequentially, one after another. For example, if a user does a request to get all the obsels on a base that takes 1 min, then another that just want to post a single obsel will have to wait a full minute. But if the kTBS runs in parallel, it will accept multiple requests to be run *at the same time*, leading to a shorter response time. For the above example, the second user request doesn't have to wait for the first request completion to post the obsel.
 
 Ok, so if parallelization is that great, why didn't we use it right away? In order for a program to run well in parallel we have to make sure that their is no side effects when it runs that way. Such side effects can occur when multiple instances of a program write to shared data. If an instance doesn't check that it is the only instance able to write to this shared data, then another instance may write to it without the first one knowing. The first instance then use the shared data value from the second instance, which could lead to bugs.
 In order to prevent this kind of problem, we have to make the program [thread safe][wp-thread-safe].
@@ -122,7 +118,7 @@ We use the concept of *named semaphore* to control the side-effects, via the [po
 
 The code responsible for the locking mechanism is in the source file [`engine/lock.py`][ktbs-source-lock], and the core method is [`WithLockMixin.lock`](https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/lock.py#L68-L116). I will now try to explain how the locking mechanism work by looking at this method step by step.
 
-I will first explain the main work with the semaphore, that is the code in the [else block](https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/lock.py#L89-L116) (I intentionnaly left out some code bits, marked with  `# ...`, to focus on the semaphore concept):
+I will first explain the main work with the semaphore, that is the code in the [else block](https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/lock.py#L89-L116) (I intentionally left out some code bits, marked with  `# ...`, to focus on the semaphore concept):
 
 ```python
 semaphore = self._get_semaphore()
@@ -145,7 +141,7 @@ except posix_ipc.BusyError:
     raise posix_ipc.BusyError(error_msg)
 ```
 
-We start by initiliazing the semaphore with
+We start by initializing the semaphore with
 ```python
 semaphore = self._get_semaphore()
 ```
@@ -184,7 +180,7 @@ There are two code blocks that I didn't mention yet :
 
 - The first one is the first [`if` block](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L85-L86). Its purpose is to set a timeout value for the lock.
 
-- The second one is the second [`if` block](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L88-L91). We check if the thread that asks for the lock is a re-entering thread. This happens for example when one deletes a trace: we lock the base via [`InBase.delete`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L135), but the call to [`super()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L136) leads to a call to [`edit()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L130) that also wants to lock the base. It is safe to let it bypass the lock at this point because it already locked the ressource upper in the call stack. That what's we do with this `if` block.
+- The second one is the second [`if` block](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L88-L91). We check if the thread that asks for the lock is a re-entering thread. This happens for example when one deletes a trace: we lock the base via [`InBase.delete`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L135), but the call to [`super()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/base.py#L136) leads to a call to [`edit()`](https://github.com/ktbs/ktbs/blob/7a1e53cf3e7710c76ecad1b0814220e5e3c8b727/lib/ktbs/engine/lock.py#L130) that also wants to lock the base. It is safe to let it bypass the lock at this point because it already locked the resource upper in the call stack. That what's we do with this `if` block.
 
 
 #### Using the lock ####
@@ -269,10 +265,28 @@ When comparing a kTBS running on a single process and a kTBS running on 4 proces
 
 
 
-Authentication with SSO
------------------------
+Protecting data on the kTBS
+---------------------------
 
-### What is OpenID Connect?
+### Protection using authentication and authorization ###
 
-### How the kTBS could benefit from it?
+In order to protect the data we make use of authentication and authorization.
+Authentication is the process of proving that you are the person you pretend to are. For example, when you go abroad a passport is used for authentication. The authorization is done after the authentication, it is the process of granting or declining access to something. Again an example, if you go on a trip to the USA you may have a passport that proves who you really are, but you may need a other document to gain access to the territory.
 
+By using these two processes on the kTBS we can protect its data effectively by providing different means of authentication for different user roles, and then defining different levels of authorization.
+
+### Authentication: using a single sign-on (SSO) solution ###
+
+[//]: # (what is SSO)
+
+#### The protocols ####
+
+[//]: # (explain diff / history of the proto)
+
+#### Implementing authentication with OAuth2 ####
+
+[//]: # (link to proto auth github)
+
+### Implementation of authentication and authorization in the kTBS ###
+
+[//]: # (plugin)
