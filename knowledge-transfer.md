@@ -229,10 +229,32 @@ class WithLockMixin:
 This way when `post_graph` is called on a `Base`, it will call the `WithLockMixin` method first. The method will get the lock, run the main code of `post_graph` that is defined in another class that `Base` inherits from, and then close the lock.
 
 
-### Running the kTBS in multi-process behind Apache ###
-[//]: # (TODO apache multi-proc)
+#### Running the kTBS in multi-process behind Apache ####
 
-[//]: # (TODO résultats)
+In order to benefit from the multi-process implementation we need a way to run it this way. Apache allows us to do so. In the kTBS documentation on how to [setup Apache][ktbs-tuto] there is the following directive for `mod_wsgi`:
+
+```ApacheConf
+<IfModule mod_wsgi.c>
+    WSGIScriptAlias /ktbs /home/user/ktbs-env/application.wsgi
+    WSGIDaemonProcess myktbs processes=1 threads=1 python-path=/home/user/ktbs-env/ktbs/lib
+    WSGIProcessGroup myktbs
+</IfModule>
+```
+
+You can see on the line that starts with `WSGIDaemonProcess` that we can define the number of processes and/or threads that Apache will use for the WSGI application (the kTBS in this case). You can tweak `processes` and `threads` to have better performance. For example, this is what I am using on my machine:
+
+```ApacheConf
+WSGIDaemonProcess myktbs processes=4 threads=1 python-path=/home/user/ktbs-env/ktbs/lib
+```
+
+
+#### Results ####
+
+When comparing a kTBS running on a single process and a kTBS running on 4 processes we typically see a performance improvement by a factor of 2 to 3 (in term of requests per second). Keep in mind that this result depends on:
+
+- what machine you are running on: a server? a laptop that has other tasks to do?
+
+- the queries you are doing on the kTBS: a GET request on a 30k obsels trace will take long on both cases, but if you use multi-processing the following requests won't block so the throughput will be higher.
 
 [wp-thread-safe]: https://en.wikipedia.org/wiki/Thread_safety
 [ktbs-lock-commit]: https://github.com/ktbs/ktbs/commit/4be847439e43cda60d7865e5c9e3eb8fe1bc872c
@@ -243,7 +265,7 @@ This way when `post_graph` is called on a `Base`, it will call the `WithLockMixi
 [ktbs-source-base]: https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/base.py#L30
 [ktbs-source-lock]: https://github.com/ktbs/ktbs/blob/733b4a7e84515682612981f47714acd1feac5e95/lib/ktbs/engine/lock.py
 [py-doc-context]: https://docs.python.org/2/reference/datamodel.html#context-managers
-
+[ktbs-tuto]: http://kernel-for-trace-based-systems.readthedocs.org/en/latest/tutorials/install.html
 
 
 
