@@ -277,15 +277,29 @@ By using these two processes on the kTBS we can protect its data effectively by 
 
 ### Authentication: using a single sign-on (SSO) solution ###
 
-[//]: # (what is SSO)
+A single sign-on solution allows a user to log-in using a service called an *identity provider* that is not part of the core application. The user may already be registered on the identity provider. A typical example: using kTBS as the core application, using Google as an identity provider.
+
+We wanted to use a single sign-on solution for doing the authentication on the kTBS. This allows us to add only a small amount of code and delegate the hard part of authentication (security) to a trusted party. Most importantly, by using a SSO solution we made the identity provider almost seamlessly interoperable, so we can choose between different ones by changing only little to the existing code. This allowed us to do a prototype with Github as identity provider in the first time, then using Claroline Connect as an identity provider later.
 
 #### The protocols ####
-
 [//]: # (explain diff / history of the proto)
+When I started to explore the SSO solutions a found a lot of things that looked the same but were in fact different. So here is a bit of explanation and history.
+
+A few years ago an initiative called *OpenID* arose on the internet. 
+The goal was that a user had a single identity that he could use on any website that supports OpenID. The identity was in fact a URL that and the protocol defined how to use this as an identity. But OpenID didn't really catch up.
+
+I believe the *OAuth* protocol came a short time after sites like LinkedIn start demanding the real password to a user email account in order to get contact. The *auth* part of OAuth stands in fact for authorization rather than authentication, but we will see later how OAuth was tweaked for authentication.
+So OAuth was one of the first to define how to properly access data of a third-party application without having to give away the user password. The leading social websites are using (or used) OAuth2 for authorization: Facebook, Twitter, Google, etc. On these websites *OAuth* is often used to grant partial authorizations to third-party applications. For example, a third-party Twitter application may only ask for the rights to see the tweets of the user, whereas another third-party application may ask for the rights to tweet on behalf of a user. The *OAuth2* protocol is well suited for this sort of tasks.
+People start tweaking this protocol in order to do authentication. We can see it that way: authentication is only the act of *authorizing* access to a user ID.
+
+Then a few months ago the *OpenID Connect* specification was released (feb. 2014). Its name is rather unfortunate because the technology is very different from the original *OpenID*, but is very similar to *OAuth2*. In fact I see it as initiative to standardize all the current OAuth2 implementations that were used for authentication. In many ways OpenID Connect is better than OAuth2 for authentication (for example it supports dynamic registration to identity providers), but as of now he has yet to catch up. In fact the only OpenID Connect identity provider that works now is Google.
+
+We choose OAuth2 for authentication, as OpenID was old and not used any more, and OpenID Connect was too young and not widely used yet.
 
 #### Implementing authentication with OAuth2 ####
 
-[//]: # (link to proto auth github)
+I wrote a [short documentation](https://github.com/vincent-octo/oauth-for-login/blob/master/oauth-for-login_fr.md) on how different OAuth2 identity providers work (in french). In the mean time I made a prototype of a kTBS plugin that implements authentication with Github OAuth2. You should read the [(short) code](https://github.com/vincent-octo/oauth-for-login/blob/master/flask-oauth/__init__.py) after reading the previously linked documentation if you want to know fully understand how to use OAuth2 for authentication.
+
 
 ### Implementation of authentication and authorization in the kTBS ###
 
