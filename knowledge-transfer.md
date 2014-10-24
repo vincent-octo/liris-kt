@@ -299,9 +299,22 @@ We choose OAuth2 for authentication, as OpenID was old and not used any more, an
 
 #### Implementing authentication with OAuth2 ####
 
-I wrote a [short documentation](https://github.com/vincent-octo/oauth-for-login/blob/master/oauth-for-login_fr.md) on how different OAuth2 identity providers work (in french). In the mean time I made a prototype of a kTBS plugin that implements authentication with Github OAuth2. You should read the [(short) code](https://github.com/vincent-octo/oauth-for-login/blob/master/flask-oauth/__init__.py) after reading the previously linked documentation if you want to know fully understand how to use OAuth2 for authentication.
+I wrote a [short documentation](https://github.com/vincent-octo/oauth-for-login/blob/master/oauth-for-login_fr.md) (in french) on how different OAuth2 identity providers work. In the mean time I made a prototype of a kTBS plugin that implements authentication with Github OAuth2. You should read the [(short) code](https://github.com/vincent-octo/oauth-for-login/blob/master/flask-oauth/__init__.py) after reading the previously linked documentation if you want to know fully understand how to use OAuth2 for authentication.
 
 
 ### Implementation of authentication and authorization in the kTBS ###
 
-[//]: # (plugin)
+The kTBS has an architecture that allows plugins and middlewares. This way I implemented authentication and authorization in a way that is not a core part of the kTBS. If the kTBS starts without the plugin it will run like a normal kTBS, without any kind of authentication or authorization. However if the kTBS starts with the plugin it will run with authentication and authorization, even on the same store.
+
+In order to use the plugin you need configure it:
+
+- register an application on the identity provider ([for example on Github](https://developer.github.com/guides/basics-of-authentication/#registering-your-app))
+- fill the [configuration file](https://github.com/ktbs/ktbs/blob/6164e673c59c25ea5aac555475b22ff039500070/examples/conf/plugin_authx.conf) of the plugin
+
+If you want to use an alternative identity provider you should add the flow code to the plugin (see for example the [flow of github](https://github.com/ktbs/ktbs/blob/6164e673c59c25ea5aac555475b22ff039500070/lib/ktbs/plugins/authx.py#L334-L356)).
+
+Then you need to start the kTBS with the configuration file of plugin:
+
+```
+ktbs -c path_to_plugin_config.conf
+```
