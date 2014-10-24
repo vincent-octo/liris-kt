@@ -15,11 +15,12 @@ Table of Contents
 1. kTBS: Purpose & Composition
 2. kTBS Performance
     1. Triple-store performance
-    2. Locking mechanism
+    2. Running the kTBS in parallel
     3. Running the kTBS in multi-process behind Apache
-3. Authentication with SSO
-    1. What is OpenID Connect? (diff openid, oauth2, etc. for disambiguation, the basics of how it works)
-    2. How the kTBS could benefit from it?
+3. Protecting data on the kTBS
+    1. Protection using authentication and authorization
+    2. Authentication: using a single sign-on (SSO) solution
+    3. Implementation of authentication and authorization in the kTBS
 
 
 kTBS: Purpose & Composition
@@ -281,7 +282,7 @@ A single sign-on solution allows a user to log-in using a service called an *ide
 
 We wanted to use a single sign-on solution for doing the authentication on the kTBS. This allows us to add only a small amount of code and delegate the hard part of authentication (security) to a trusted party. Most importantly, by using a SSO solution we made the identity provider almost seamlessly interoperable, so we can choose between different ones by changing only little to the existing code. This allowed us to do a prototype with Github as identity provider in the first time, then using Claroline Connect as an identity provider later.
 
-#### The protocols ####
+#### The authentication protocols ####
 [//]: # (explain diff / history of the proto)
 When I started to explore the SSO solutions a found a lot of things that looked the same but were in fact different. So here is a bit of explanation and history.
 
